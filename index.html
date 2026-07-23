@@ -1,411 +1,148 @@
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.button import Button
-from kivy.uix.spinner import Spinner, SpinnerOption
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
-from kivy.metrics import dp, sp
-from kivy.core.text import LabelBase
-import arabic_reshaper
-import os
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>حاسبة صيانة الهواتف</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --input-bg: #0d1117;
+            --border-color: #30363d;
+            --accent-blue: #38bdf8;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+            --accent-purple: #a855f7;
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 12px; max-width: 600px; margin: 0 auto; padding-bottom: 30px; }
+        .header { text-align: center; margin-bottom: 12px; }
+        .header h1 { font-size: 1.4rem; color: var(--accent-blue); }
+        .action-bar { display: flex; gap: 10px; margin-bottom: 14px; }
+        .btn { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn-add { background-color: var(--accent-green); color: #fff; }
+        .btn-reset { background-color: var(--accent-red); color: #fff; }
+        .btn-calc { background-color: #1d4ed8; color: #fff; width: 100%; padding: 12px; font-size: 1.05rem; margin: 10px 0 14px; }
+        .repair-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+        .repair-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+        .item-title { font-weight: bold; color: var(--accent-blue); font-size: 0.95rem; }
+        .type-select { background-color: var(--input-bg); color: var(--accent-blue); border: 1px solid var(--border-color); padding: 6px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; }
+        .btn-remove { background-color: var(--accent-red); color: white; border: none; width: 28px; height: 28px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+        .input-group { display: flex; flex-direction: column; gap: 4px; }
+        .input-group label { font-size: 0.8rem; color: var(--text-muted); }
+        .input-group input { background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: #fff; font-size: 1rem; font-weight: bold; text-align: left; direction: ltr; }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .res-card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; position: relative; overflow: hidden; }
+        .res-card::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+        .res-dakhili::after { background-color: var(--accent-blue); }
+        .res-khariji::after { background-color: var(--accent-purple); }
+        .res-piec::after { background-color: var(--text-muted); }
+        .res-amil::after { background-color: var(--accent-green); }
+        .res-moulai::after { background-color: #2563eb; }
+        .res-amil-piec::after { background-color: var(--accent-orange); }
+        .res-info { display: flex; flex-direction: column; gap: 2px; }
+        .res-title { font-size: 0.72rem; color: var(--text-muted); }
+        .res-val { font-size: 1rem; font-weight: bold; color: #fff; direction: ltr; text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="header"><h1>📱 حاسبة صيانة الهواتف</h1></div>
+    <div class="action-bar">
+        <button class="btn btn-add" onclick="addRepairItem()">➕ إضافة إصلاح</button>
+        <button class="btn btn-reset" onclick="resetAll()">🗑️ مسح الكل</button>
+    </div>
+    <div id="repairList" class="repair-list"></div>
+    <button class="btn btn-calc" onclick="calculateAll()">🧮 حساب الكل</button>
+    <div class="summary-grid">
+        <div class="res-card res-dakhili"><div class="res-info"><span class="res-title">مجموع البياس الداخلي</span><span class="res-val" id="resDakhili">0.00</span></div></div>
+        <div class="res-card res-khariji"><div class="res-info"><span class="res-title">مجموع البياس الخارجي</span><span class="res-val" id="resKhariji">0.00</span></div></div>
+        <div class="res-card res-piec"><div class="res-info"><span class="res-title">إجمالي قطع الغيار</span><span class="res-val" id="resTotalPiec">0.00</span></div></div>
+        <div class="res-card res-amil"><div class="res-info"><span class="res-title">فائدة العامل الإجمالية</span><span class="res-val" id="resAmil">0.00</span></div></div>
+        <div class="res-card res-moulai"><div class="res-info"><span class="res-title">فائدة مولاي الإجمالية</span><span class="res-val" id="resMoulai">0.00</span></div></div>
+        <div class="res-card res-amil-piec"><div class="res-info"><span class="res-title">فائدة العامل والقطع</span><span class="res-val" id="resAmilPlusPiec">0.00</span></div></div>
+    </div>
+    <script>
+        let itemCount = 0;
+        function addRepairItem() {
+            itemCount++;
+            const list = document.getElementById('repairList');
+            const card = document.createElement('div');
+            card.className = 'repair-card'; card.id = `item-${itemCount}`;
+            card.innerHTML = `
+                <div class="card-header">
+                    <button class="btn-remove" onclick="removeItem('item-${itemCount}')">✕</button>
+                    <select class="type-select" onchange="onTypeChange(this, 'item-${itemCount}')">
+                        <option value="ecran3">شاشة قسمة ثلاثة</option>
+                        <option value="ecran2">شاشة قسمة اثنين</option>
+                        <option value="akhar">إصلاح آخر</option>
+                        <option value="khsara2">خسارة قسمة اثنين</option>
+                        <option value="khsara3">خسارة قسمة ثلاثة</option>
+                    </select>
+                    <span class="item-title">إصلاح رقم #${itemCount}</span>
+                </div>
+                <div class="input-grid" id="grid-item-${itemCount}">
+                    <div class="input-group"><label>سعر الزبون</label><input type="number" class="inp-price" placeholder="0" oninput="calculateAll()"></div>
+                    <div class="input-group"><label>سعر بياس داخلي</label><input type="number" class="inp-dakhili" placeholder="0" oninput="calculateAll()"></div>
+                    <div class="input-group"><label>سعر بياس خارجي</label><input type="number" class="inp-khariji" placeholder="0" oninput="calculateAll()"></div>
+                </div>`;
+            list.appendChild(card); calculateAll();
+        }
+        function removeItem(id) {
+            const list = document.getElementById('repairList');
+            if (list.children.length > 1) { document.getElementById(id).remove(); }
+            else { document.querySelectorAll(`#${id} input`).forEach(i => i.value = ''); }
+            calculateAll();
+        }
+        function onTypeChange(selectEl, itemId) {
+            const grid = document.getElementById(`grid-${itemId}`);
+            if (selectEl.value.includes('khsara')) {
+                grid.innerHTML = `<div class="input-group" style="grid-column: span 2;"><label style="color:var(--accent-red)">مبلغ الخسارة</label><input type="number" class="inp-loss" placeholder="0" oninput="calculateAll()"></div>`;
+            } else {
+                grid.innerHTML = `
+                    <div class="input-group"><label>سعر الزبون</label><input type="number" class="inp-price" placeholder="0" oninput="calculateAll()"></div>
+                    <div class="input-group"><label>سعر بياس داخلي</label><input type="number" class="inp-dakhili" placeholder="0" oninput="calculateAll()"></div>
+                    <div class="input-group"><label>سعر بياس خارجي</label><input type="number" class="inp-khariji" placeholder="0" oninput="calculateAll()"></div>`;
+            }
+            calculateAll();
+        }
+        function resetAll() { document.getElementById('repairList').innerHTML = ''; itemCount = 0; addRepairItem(); }
+        function calculateAll() {
+            let totalD = 0, totalK = 0, totalM = 0, totalA = 0;
+            document.querySelectorAll('.repair-card').forEach(card => {
+                const type = card.querySelector('.type-select').value;
+                if (type.includes('khsara')) {
+                    const loss = parseFloat(card.querySelector('.inp-loss')?.value || 0);
+                    const faida = -loss;
+                    if (type === 'khsara3') { totalM += (faida * 2) / 3; totalA += faida / 3; }
+                    else { totalM += faida / 2; totalA += faida / 2; }
+                } else {
+                    const price = parseFloat(card.querySelector('.inp-price')?.value || 0);
+                    const d = parseFloat(card.querySelector('.inp-dakhili')?.value || 0);
+                    const k = parseFloat(card.querySelector('.inp-khariji')?.value || 0);
+                    const faida = price - (d + k);
+                    totalD += d; totalK += k;
+                    if (type === 'ecran3') { totalM += (faida * 2) / 3; totalA += faida / 3; }
+                    else { totalM += faida / 2; totalA += faida / 2; }
+                }
+            });
+            const totalP = totalD + totalK;
+            const fmt = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('resDakhili').textContent = fmt(totalD);
+            document.getElementById('resKhariji').textContent = fmt(totalK);
+            document.getElementById('resTotalPiec').textContent = fmt(totalP);
+            document.getElementById('resAmil').textContent = fmt(totalA);
+            document.getElementById('resMoulai').textContent = fmt(totalM);
+            document.getElementById('resAmilPlusPiec').textContent = fmt(totalA + totalP);
+        }
+        window.onload = addRepairItem;
+    </script>
+</body>
+</html>
 
-FONT_NAME = 'ArabicAndroidFont'
-
-def init_arabic_font():
-    android_system_fonts = [
-        '/system/fonts/NotoNaskhArabic-Regular.ttf',
-        '/system/fonts/NotoSansArabic-Regular.ttf',
-        '/system/fonts/NotoSansArabicUI-Regular.ttf',
-        '/system/fonts/DroidSansArabic.ttf'
-    ]
-    for font_path in android_system_fonts:
-        if os.path.exists(font_path):
-            try:
-                LabelBase.register(name=FONT_NAME, fn_regular=font_path)
-                return FONT_NAME
-            except Exception:
-                pass
-    return None
-
-FONT_AR = init_arabic_font()
-
-def ar(text):
-    if not text:
-        return ""
-    try:
-        reshaped = arabic_reshaper.reshape(str(text))
-        return reshaped[::-1]
-    except Exception:
-        return text
-
-class CustomSpinnerOption(SpinnerOption):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if FONT_AR:
-            self.font_name = FONT_AR
-        self.font_size = sp(13)
-        self.color = (0.98, 0.98, 0.98, 1)
-        self.background_normal = ''
-        self.background_color = (0.16, 0.22, 0.30, 1)
-
-class ResultCard(BoxLayout):
-    def __init__(self, title, accent_color=(0.3, 0.65, 0.95, 1), **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = 'horizontal'
-        self.padding = [dp(8), dp(4)]
-        self.spacing = dp(6)
-        self.size_hint_y = None
-        self.height = dp(54)
-
-        with self.canvas.before:
-            Color(0.14, 0.17, 0.23, 1)
-            self.bg_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(8),])
-            Color(0.22, 0.27, 0.35, 1)
-            self.border = Line(rounded_rectangle=(self.pos[0], self.pos[1], self.size[0], self.size[1], dp(8)), width=dp(1))
-
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
-
-        accent_bar = BoxLayout(size_hint_x=None, width=dp(4))
-        with accent_bar.canvas.before:
-            Color(*accent_color)
-            accent_bar.bar_rect = RoundedRectangle(pos=accent_bar.pos, size=accent_bar.size, radius=[dp(2),])
-        accent_bar.bind(pos=lambda inst, val: setattr(accent_bar.bar_rect, 'pos', val),
-                        size=lambda inst, val: setattr(accent_bar.bar_rect, 'size', val))
-
-        text_layout = BoxLayout(orientation='vertical', spacing=dp(1))
         
-        self.lbl_title = Label(
-            text=ar(title),
-            font_name=FONT_AR if FONT_AR else None,
-            font_size=sp(10.5),
-            color=(0.70, 0.76, 0.84, 1),
-            halign='right',
-            valign='middle'
-        )
-        self.lbl_title.bind(size=self.lbl_title.setter('text_size'))
-
-        self.lbl_value = Label(
-            text="0.00",
-            font_name="Roboto",
-            font_size=sp(14.5),
-            bold=True,
-            color=(0.95, 0.97, 1, 1),
-            halign='right',
-            valign='middle'
-        )
-        self.lbl_value.bind(size=self.lbl_value.setter('text_size'))
-
-        text_layout.add_widget(self.lbl_title)
-        text_layout.add_widget(self.lbl_value)
-
-        self.add_widget(text_layout)
-        self.add_widget(accent_bar)
-
-    def _update_canvas(self, instance, value):
-        self.bg_rect.pos = instance.pos
-        self.bg_rect.size = instance.size
-        self.border.rounded_rectangle = (instance.pos[0], instance.pos[1], instance.size[0], instance.size[1], dp(8))
-
-class RepairItemCard(BoxLayout):
-    def __init__(self, item_num, remove_callback, calc_callback, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = 'vertical'
-        self.spacing = dp(8)
-        self.size_hint_y = None
-        self.height = dp(200)
-        self.padding = dp(10)
-        self.calc_callback = calc_callback
-
-        with self.canvas.before:
-            Color(0.14, 0.17, 0.23, 1)
-            self.bg_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(10),])
-            Color(0.22, 0.27, 0.35, 1)
-            self.border = Line(rounded_rectangle=(self.pos[0], self.pos[1], self.size[0], self.size[1], dp(10)), width=dp(1))
-
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
-
-        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(34), spacing=dp(6))
-
-        btn_remove = Button(
-            text="X",
-            size_hint_x=None,
-            width=dp(36),
-            background_normal='',
-            background_color=(0.85, 0.25, 0.28, 1),
-            font_size=sp(14),
-            bold=True,
-            font_name="Roboto"
-        )
-        btn_remove.bind(on_press=lambda instance: remove_callback(self))
-        header.add_widget(btn_remove)
-
-        self.opt_ecran3 = ar("شاشة قسمة ثلاثة")
-        self.opt_ecran2 = ar("شاشة قسمة اثنين")
-        self.opt_akhar = ar("إصلاح آخر")
-        self.opt_khsara2 = ar("خسارة قسمة اثنين")
-        self.opt_khsara3 = ar("خسارة قسمة ثلاثة")
-
-        self.type_spinner = Spinner(
-            text=self.opt_ecran3,
-            values=(
-                self.opt_ecran3, 
-                self.opt_ecran2, 
-                self.opt_akhar, 
-                self.opt_khsara2, 
-                self.opt_khsara3
-            ),
-            font_name=FONT_AR if FONT_AR else None,
-            option_cls=CustomSpinnerOption,
-            size_hint_x=0.54,
-            font_size=sp(12.5),
-            bold=True,
-            color=(0.4, 0.85, 1, 1),
-            background_normal='',
-            background_color=(0.11, 0.16, 0.23, 1)
-        )
-        self.type_spinner.bind(text=self.on_type_change)
-        header.add_widget(self.type_spinner)
-
-        header.add_widget(
-            Label(
-                text=f"{item_num} : " + ar("إصلاح رقم"),
-                font_name=FONT_AR if FONT_AR else None,
-                font_size=sp(13.5),
-                bold=True,
-                color=(0.35, 0.75, 1, 1),
-                size_hint_x=0.36
-            )
-        )
-
-        self.add_widget(header)
-
-        self.grid = GridLayout(cols=2, spacing=dp(6), size_hint_y=None, height=dp(130))
-
-        self.lbl_price = Label(text=ar("سعر الزبون:"), font_name=FONT_AR if FONT_AR else None, font_size=sp(13), color=(0.8, 0.85, 0.92, 1))
-        self.txt_price = TextInput(font_name="Roboto", input_filter='float', multiline=False, font_size=sp(15), background_normal='', background_color=(0.08, 0.10, 0.14, 1), foreground_color=(1, 1, 1, 1), padding=[dp(8), dp(6)])
-        self.txt_price.bind(text=lambda inst, val: self.calc_callback(None))
-
-        self.lbl_dakhili = Label(text=ar("سعر بياس داخلي:"), font_name=FONT_AR if FONT_AR else None, font_size=sp(13), color=(0.8, 0.85, 0.92, 1))
-        self.txt_dakhili = TextInput(font_name="Roboto", input_filter='float', multiline=False, font_size=sp(15), background_normal='', background_color=(0.08, 0.10, 0.14, 1), foreground_color=(1, 1, 1, 1), padding=[dp(8), dp(6)])
-        self.txt_dakhili.bind(text=lambda inst, val: self.calc_callback(None))
-
-        self.lbl_khariji = Label(text=ar("سعر بياس خارجي:"), font_name=FONT_AR if FONT_AR else None, font_size=sp(13), color=(0.8, 0.85, 0.92, 1))
-        self.txt_khariji = TextInput(font_name="Roboto", input_filter='float', multiline=False, font_size=sp(15), background_normal='', background_color=(0.08, 0.10, 0.14, 1), foreground_color=(1, 1, 1, 1), padding=[dp(8), dp(6)])
-        self.txt_khariji.bind(text=lambda inst, val: self.calc_callback(None))
-
-        self.lbl_loss = Label(text=ar("مبلغ الخسارة:"), font_name=FONT_AR if FONT_AR else None, font_size=sp(13), color=(0.95, 0.45, 0.45, 1))
-        self.txt_loss = TextInput(font_name="Roboto", input_filter='float', multiline=False, font_size=sp(15), background_normal='', background_color=(0.08, 0.10, 0.14, 1), foreground_color=(1, 1, 1, 1), padding=[dp(8), dp(6)])
-        self.txt_loss.bind(text=lambda inst, val: self.calc_callback(None))
-
-        self.add_widget(self.grid)
-        self.build_inputs(is_loss=False)
-
-    def build_inputs(self, is_loss=False):
-        self.grid.clear_widgets()
-        if is_loss:
-            self.grid.height = dp(42)
-            self.height = dp(112)
-            self.grid.add_widget(self.lbl_loss)
-            self.grid.add_widget(self.txt_loss)
-        else:
-            self.grid.height = dp(130)
-            self.height = dp(200)
-            self.grid.add_widget(self.lbl_price)
-            self.grid.add_widget(self.txt_price)
-            self.grid.add_widget(self.lbl_dakhili)
-            self.grid.add_widget(self.txt_dakhili)
-            self.grid.add_widget(self.lbl_khariji)
-            self.grid.add_widget(self.txt_khariji)
-
-    def on_type_change(self, spinner, text):
-        is_loss = (text in (self.opt_khsara2, self.opt_khsara3))
-        self.build_inputs(is_loss)
-        self.calc_callback(None)
-
-    def _update_canvas(self, instance, value):
-        self.bg_rect.pos = instance.pos
-        self.bg_rect.size = instance.size
-        self.border.rounded_rectangle = (instance.pos[0], instance.pos[1], instance.size[0], instance.size[1], dp(10))
-
-class RepairCalcApp(App):
-    def build(self):
-        self.title = "حاسبة الصيانة"
-        self.repair_count = 0
-
-        main_layout = BoxLayout(orientation='vertical', padding=dp(8), spacing=dp(6))
-        with main_layout.canvas.before:
-            Color(0.07, 0.08, 0.10, 1)
-            self.bg_rect = Rectangle(pos=main_layout.pos, size=main_layout.size)
-        main_layout.bind(pos=self._update_bg, size=self._update_bg)
-
-        title_box = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(34), spacing=dp(2))
-        title_label = Label(
-            text=ar("حاسبة صيانة الهواتف"),
-            font_name=FONT_AR if FONT_AR else None,
-            font_size=sp(19),
-            bold=True,
-            color=(0.35, 0.75, 1, 1)
-        )
-        title_box.add_widget(title_label)
-        main_layout.add_widget(title_box)
-
-        top_btn_layout = BoxLayout(orientation='horizontal', spacing=dp(8), size_hint_y=None, height=dp(38))
-
-        btn_add = Button(
-            text=ar("إضافة إصلاح"),
-            font_name=FONT_AR if FONT_AR else None,
-            background_normal='',
-            background_color=(0.10, 0.65, 0.45, 1),
-            font_size=sp(14),
-            bold=True
-        )
-        btn_add.bind(on_press=self.add_repair_item)
-
-        btn_reset = Button(
-            text=ar("مسح الكل"),
-            font_name=FONT_AR if FONT_AR else None,
-            background_normal='',
-            background_color=(0.82, 0.22, 0.25, 1),
-            font_size=sp(14),
-            bold=True
-        )
-        btn_reset.bind(on_press=self.reset_all)
-
-        top_btn_layout.add_widget(btn_add)
-        top_btn_layout.add_widget(btn_reset)
-        main_layout.add_widget(top_btn_layout)
-
-        self.scroll = ScrollView(size_hint=(1, 1))
-        self.items_container = BoxLayout(orientation='vertical', spacing=dp(8), size_hint_y=None)
-        self.items_container.bind(minimum_height=self.items_container.setter('height'))
-        self.scroll.add_widget(self.items_container)
-        main_layout.add_widget(self.scroll)
-
-        self.add_repair_item(None)
-
-        btn_calc = Button(
-            text=ar("حساب الكل"),
-            font_name=FONT_AR if FONT_AR else None,
-            size_hint_y=None,
-            height=dp(42),
-            background_normal='',
-            background_color=(0.12, 0.48, 0.90, 1),
-            font_size=sp(16),
-            bold=True
-        )
-        btn_calc.bind(on_press=self.calculate_all)
-        main_layout.add_widget(btn_calc)
-
-        results_container = GridLayout(
-            cols=2,
-            spacing=dp(6),
-            size_hint_y=None,
-            height=dp(174)
-        )
-
-        self.frame_dakhili = ResultCard("مجموع البياس الداخلي", accent_color=(0.35, 0.65, 0.95, 1))
-        results_container.add_widget(self.frame_dakhili)
-
-        self.frame_khariji = ResultCard("مجموع البياس الخارجي", accent_color=(0.65, 0.45, 0.95, 1))
-        results_container.add_widget(self.frame_khariji)
-
-        self.frame_total_piec = ResultCard("إجمالي قطع الغيار", accent_color=(0.55, 0.60, 0.70, 1))
-        results_container.add_widget(self.frame_total_piec)
-
-        self.frame_amil = ResultCard("فائدة العامل الإجمالية", accent_color=(0.10, 0.65, 0.45, 1))
-        results_container.add_widget(self.frame_amil)
-
-        self.frame_moulai = ResultCard("فائدة مولاي الإجمالية", accent_color=(0.12, 0.48, 0.90, 1))
-        results_container.add_widget(self.frame_moulai)
-
-        self.frame_amil_plus_piec = ResultCard("فائدة العامل والقطع", accent_color=(0.95, 0.60, 0.10, 1))
-        results_container.add_widget(self.frame_amil_plus_piec)
-
-        main_layout.add_widget(results_container)
-
-        return main_layout
-
-    def _update_bg(self, instance, value):
-        self.bg_rect.pos = instance.pos
-        self.bg_rect.size = instance.size
-
-    def add_repair_item(self, instance):
-        self.repair_count += 1
-        item = RepairItemCard(self.repair_count, self.remove_repair_item, self.calculate_all)
-        self.items_container.add_widget(item)
-
-    def remove_repair_item(self, item_widget):
-        if len(self.items_container.children) > 1:
-            self.items_container.remove_widget(item_widget)
-        else:
-            item_widget.txt_price.text = ""
-            item_widget.txt_dakhili.text = ""
-            item_widget.txt_khariji.text = ""
-            item_widget.txt_loss.text = ""
-        self.calculate_all(None)
-
-    def reset_all(self, instance):
-        self.items_container.clear_widgets()
-        self.repair_count = 0
-        self.add_repair_item(None)
-
-        self.frame_dakhili.lbl_value.text = "0.00"
-        self.frame_khariji.lbl_value.text = "0.00"
-        self.frame_total_piec.lbl_value.text = "0.00"
-        self.frame_amil.lbl_value.text = "0.00"
-        self.frame_moulai.lbl_value.text = "0.00"
-        self.frame_amil_plus_piec.lbl_value.text = "0.00"
-
-    def calculate_all(self, instance):
-        total_dakhili = 0.0
-        total_khariji = 0.0
-        total_faida_moulai = 0.0
-        total_faida_amil = 0.0
-
-        for item in self.items_container.children:
-            try:
-                rep_type = item.type_spinner.text
-                is_loss = (rep_type in (item.opt_khsara2, item.opt_khsara3))
-
-                if is_loss:
-                    loss_val = float(item.txt_loss.text) if item.txt_loss.text else 0.0
-                    dakhili = 0.0
-                    khariji = 0.0
-                    faida_item = -loss_val
-                else:
-                    price = float(item.txt_price.text) if item.txt_price.text else 0.0
-                    dakhili = float(item.txt_dakhili.text) if item.txt_dakhili.text else 0.0
-                    khariji = float(item.txt_khariji.text) if item.txt_khariji.text else 0.0
-                    faida_item = price - (dakhili + khariji)
-
-                if rep_type == item.opt_ecran3 or rep_type == item.opt_khsara3:
-                    moulai_item = (faida_item * 2.0) / 3.0
-                    amil_item = faida_item / 3.0
-                else:
-                    moulai_item = faida_item / 2.0
-                    amil_item = faida_item / 2.0
-
-                total_dakhili += dakhili
-                total_khariji += khariji
-                total_faida_moulai += moulai_item
-                total_faida_amil += amil_item
-
-            except ValueError:
-                pass
-
-        total_piec = total_dakhili + total_khariji
-        amil_plus_piec = total_faida_amil + total_piec
-
-        self.frame_dakhili.lbl_value.text = f"{total_dakhili:,.2f}"
-        self.frame_khariji.lbl_value.text = f"{total_khariji:,.2f}"
-        self.frame_total_piec.lbl_value.text = f"{total_piec:,.2f}"
-        self.frame_amil.lbl_value.text = f"{total_faida_amil:,.2f}"
-        self.frame_moulai.lbl_value.text = f"{total_faida_moulai:,.2f}"
-        self.frame_amil_plus_piec.lbl_value.text = f"{amil_plus_piec:,.2f}"
-
-if __name__ == "__main__":
-    RepairCalcApp().run()
-      
